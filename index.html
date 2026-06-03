@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RETRO CAR RACER</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body, html {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            overflow: hidden;
+            background-color: #a0c4ff;
+            /* Applying the retro font */
+            font-family: 'Press Start 2P', monospace;
+            color: #1a202c;
+            user-select: none;
+        }
+
+        #threejs-canvas {
+            position: absolute; top: 0; left: 0;
+            width: 100%; height: 100%; z-index: 1;
+        }
+
+        #webcam {
+            transform: scaleX(-1);
+            position: absolute; bottom: 60px; /* Shifted up slightly to clear the footer */
+            left: 20px;
+            width: 110px; height: 82px;
+            /* Blocky borders for the webcam */
+            border-radius: 0px;
+            border: 4px solid #8b8b8b;
+            box-shadow: 4px 4px 0px #333;
+            z-index: 10; opacity: 0.8;
+        }
+
+        /* Blocky Minecraft-style HUD */
+        .hud-container {
+            position: absolute; z-index: 100; pointer-events: none;
+            background: rgba(198, 198, 198, 0.9);
+            border: 4px solid #fff;
+            border-bottom-color: #555;
+            border-right-color: #555;
+            padding: 12px 20px; 
+            border-radius: 0;
+            box-shadow: 4px 4px 0px rgba(0,0,0,0.5);
+        }
+        .top-left { top: 20px; left: 20px; }
+        .top-right { top: 20px; right: 20px; text-align: right; }
+        
+        h1 { margin: 0; font-size: 1.2rem; letter-spacing: 0px; color: #333; text-transform: uppercase; text-shadow: 2px 2px #fff; }
+        .score-box { font-size: 1.6rem; font-weight: normal; margin-top: 8px; color: #fff; text-shadow: 2px 2px #000; }
+        .sub-text { font-size: 0.6rem; color: #222; font-weight: normal; margin-top: 5px; line-height: 1.5; }
+        
+        .jump-pill {
+            display: inline-block; padding: 6px 10px; background: #ecc94b; 
+            color: #000; border: 2px solid #000; border-radius: 0; 
+            font-size: 0.6rem; margin-top: 8px;
+            box-shadow: 2px 2px 0px #000;
+        }
+
+        /* Interface Screens Overlays */
+        .screen-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 200; display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            background: rgba(0, 0, 0, 0.7);
+        }
+        .hidden { display: none !important; }
+        
+        .menu-title { font-size: 2.5rem; color: #fff; text-transform: uppercase; margin-bottom: 15px; text-shadow: 4px 4px #000; text-align: center; line-height: 1.2; }
+        .menu-btn {
+            background: #737373; color: white; 
+            border: 4px solid #fff; border-bottom-color: #333; border-right-color: #333;
+            padding: 15px 30px;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 1rem; border-radius: 0; cursor: pointer;
+            text-transform: uppercase; transition: background 0.2s;
+            pointer-events: auto; box-shadow: 4px 4px 0px #000;
+        }
+        .menu-btn:hover { background: #999; }
+        .menu-btn:active { border-top-color: #333; border-left-color: #333; border-bottom-color: #fff; border-right-color: #fff; box-shadow: 2px 2px 0px #000; transform: translate(2px, 2px); }
+
+        /* ADDED PORTFOLIO FOOTER STYLES */
+        .portfolio-footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(15, 15, 15, 0.75); 
+            backdrop-filter: blur(5px);         
+            color: #ffffff;
+            text-align: center;
+            padding: 10px 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 14px;
+            z-index: 9999;                      
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .portfolio-footer p {
+            margin: 0 0 5px 0;
+            opacity: 0.8;
+            font-size: 12px;
+            font-family: 'Press Start 2P', monospace; /* Keep the retro vibe for the text */
+            font-size: 8px;
+        }
+
+        .footer-links a {
+            color: #00ffcc;                     
+            text-decoration: none;
+            margin: 0 15px;
+            font-weight: bold;
+            transition: color 0.2s ease;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Clean font for links */
+        }
+
+        .footer-links a:hover {
+            color: #ffffff;                     
+        }
+    </style>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+</head>
+<body>
+
+    <video id="webcam" autoplay playsinline></video>
+    <canvas id="threejs-canvas"></canvas>
+
+    <div class="hud-container top-left">
+        <h1>ENDLESS RACER</h1>
+        <div class="sub-text">STEER: HEAD MOVEMENT<br>JUMP: [J]<br>PAUSE: [SPACE]</div>
+        <div id="jump-display" class="jump-pill">JUMPS: 3/3 (MAX)</div>
+    </div>
+
+    <div class="hud-container top-right">
+        <div class="sub-text">HI-SCORE: <span id="hi-score-display" style="color:#dd6b20;">0000</span></div>
+        <div class="score-box" id="score-display">0000</div>
+    </div>
+
+    <div id="start-screen" class="screen-overlay">
+        <div class="menu-title">RETRO<br>RACER</div>
+        <div class="sub-text" style="margin-bottom: 30px; color: #ccc; font-size: 0.8rem;">START YOUR ENGINE</div>
+        <button class="menu-btn" onclick="startEngineSystem()">PLAY</button>
+    </div>
+
+    <div id="pause-screen" class="screen-overlay hidden">
+        <div class="menu-title">PAUSED</div>
+        <button class="menu-btn" onclick="togglePause()">RESUME</button>
+    </div>
+
+    <div id="gameover-screen" class="screen-overlay hidden">
+        <div class="menu-title" style="color: #ff5555;">CRASHED!</div>
+        <div id="final-score-msg" class="sub-text" style="margin-bottom: 30px; font-size: 0.8rem; color: #fff;">SCORE: 0000</div>
+        <button class="menu-btn" onclick="resetGame()">RESTART</button>
+    </div>
+
+    <footer class="portfolio-footer">
+        <p>Created by Abraham Manjolo | Connect with me:</p>
+        <div class="footer-links">
+            <a href="https://www.linkedin.com/in/abraham-manjolo-89945a28a/" target="_blank" rel="noopener noreferrer">
+                <i class="fab fa-linkedin"></i> LinkedIn
+            </a>
+            <a href="https://github.com/AbrahamManjolo" target="_blank" rel="noopener noreferrer">
+                <i class="fab fa-github"></i> GitHub
+            </a>
+            <a href="https://www.instagram.com/abraham.mann.94/" target="_blank" rel="noopener noreferrer">
+                <i class="fab fa-instagram"></i> Instagram
+            </a>
+        </div>
+    </footer>
+
+    <script>
+        const videoElement = document.getElementById('webcam');
+        const scoreDisplay = document.getElementById('score-display');
+        const hiScoreDisplay = document.getElementById('hi-score-display');
+        const jumpDisplay = document.getElementById('jump-display');
+        
+        const startScreen = document.getElementById('start-screen');
+        const pauseScreen = document.getElementById('pause-screen');
+        const gameoverScreen = document.getElementById('gameover-screen');
+        const finalScoreMsg = document.getElementById('final-score-msg');
+
+        let targetX = 0;
+        let score = 0;
+        let highScore = localStorage.getItem('lambo_hi_score') || 0;
+        hiScoreDisplay.innerText = String(highScore).padStart(4, '0');
+
+        let isPaused = false;
+        let isGameOver = true; 
+        let gameSpeed = 38; 
+
+        // Jump Variables
+        let availableJumps = 3;
+        const maxJumps = 3;
+        let jumpTimer = 0;
+        
+        // Jump Physics Variables
+        let isJumping = false;
+        let jumpVelocity = 0;
+        const gravity = 42; 
+
+        // --- 1. AUDIO SYNTHESIS ENGINE ---
+        let audioCtx, engineOsc, engineOsc2, engineGain, skidNoise, skidFilter, skidGain;
+
+        function initAudioEngine() {
+            audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            engineOsc = audioCtx.createOscillator();
+            engineOsc2 = audioCtx.createOscillator();
+            engineGain = audioCtx.createGain();
+            const engineFilter = audioCtx.createBiquadFilter();
+            
+            // Base rumble
+            engineOsc.type = 'sawtooth';
+            engineOsc.frequency.setValueAtTime(45, audioCtx.currentTime);
+            
+            // Sports car whine (Square wave pitched up)
+            engineOsc2.type = 'square';
+            engineOsc2.frequency.setValueAtTime(90, audioCtx.currentTime);
+            
+            engineFilter.type = 'lowpass';
+            engineFilter.frequency.setValueAtTime(220, audioCtx.currentTime);
+            
+            engineGain.gain.setValueAtTime(0.0, audioCtx.currentTime); 
+            
+            engineOsc.connect(engineFilter);
+            engineOsc2.connect(engineFilter);
+            engineFilter.connect(engineGain);
+            engineGain.connect(audioCtx.destination);
+            engineOsc.start();
+            engineOsc2.start();
+
+            const bufferSize = audioCtx.sampleRate * 2;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) {
+                data[i] = Math.random() * 2 - 1; 
+            }
+            
+            skidNoise = audioCtx.createBufferSource();
+            skidNoise.buffer = buffer;
+            skidNoise.loop = true;
+            
+            skidFilter = audioCtx.createBiquadFilter();
+            skidFilter.type = 'bandpass';
+            skidFilter.frequency.setValueAtTime(800, audioCtx.currentTime); 
+            skidFilter.Q.setValueAtTime(3, audioCtx.currentTime);
+            
+            skidGain = audioCtx.createGain();
+            skidGain.gain.setValueAtTime(0, audioCtx.currentTime); 
+            
+            skidNoise.connect(skidFilter);
+            skidFilter.connect(skidGain);
+            skidGain.connect(audioCtx.destination);
+            skidNoise.start();
+        }
+
+        function updateAudioMetrics(currentSpeed, lateralShiftIntensity) {
+            if (!audioCtx || isPaused || isGameOver) {
+                if(engineGain) engineGain.gain.setValueAtTime(0, audioCtx.currentTime);
+                if(skidGain) skidGain.gain.setValueAtTime(0, audioCtx.currentTime);
+                return;
+            }
+            
+            const targetRPMFreq = 60 + (currentSpeed * 2.5);
+            engineOsc.frequency.setTargetAtTime(targetRPMFreq, audioCtx.currentTime, 0.1);
+            // Perfect fifth harmonic for a V10/V12 scream
+            engineOsc2.frequency.setTargetAtTime(targetRPMFreq * 1.5, audioCtx.currentTime, 0.1); 
+            engineGain.gain.setTargetAtTime(0.18, audioCtx.currentTime, 0.1);
+
+            if (lateralShiftIntensity > 0.08 && !isJumping) {
+                skidGain.gain.setTargetAtTime(0.18, audioCtx.currentTime, 0.05); 
+            } else {
+                skidGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1); 
+            }
+        }
+
+        function startEngineSystem() {
+            if (!audioCtx) initAudioEngine();
+            startScreen.classList.add('hidden');
+            isGameOver = false;
+            resetGame();
+        }
+
+        // --- 2. THREE.JS SCENE SETUP ---
+        const canvas = document.getElementById('threejs-canvas');
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB); 
+        scene.fog = new THREE.FogExp2(0x87CEEB, 0.015);
+
+        const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 3.5, 7.5); 
+
+        const renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+        // --- 3. MODEL STRUCT DESIGN DESIGNATORS ---
+        
+        function createLamborghini() {
+            const lambo = new THREE.Group();
+            const bodyMat = new THREE.MeshPhongMaterial({ color: 0xffcc00, shininess: 120, flatShading: true });
+            const darkTrimMat = new THREE.MeshPhongMaterial({ color: 0x111116, shininess: 30 });
+            const windowMat = new THREE.MeshPhongMaterial({ color: 0x050811, shininess: 90 });
+
+            const baseGeo = new THREE.BoxGeometry(1.6, 0.25, 3.4);
+            const baseMesh = new THREE.Mesh(baseGeo, bodyMat);
+            baseMesh.position.y = 0.2;
+            lambo.add(baseMesh);
+
+            const noseGeo = new THREE.BoxGeometry(1.58, 0.15, 1.0);
+            const noseMesh = new THREE.Mesh(noseGeo, bodyMat);
+            noseMesh.position.set(0, 0.15, -1.6);
+            noseMesh.rotation.x = 0.08; 
+            lambo.add(noseMesh);
+
+            const roofGeo = new THREE.BoxGeometry(1.25, 0.45, 1.5);
+            const roofMesh = new THREE.Mesh(roofGeo, windowMat);
+            roofMesh.position.set(0, 0.5, -0.1);
+            lambo.add(roofMesh);
+
+            const spoilerStrutGeo = new THREE.BoxGeometry(0.05, 0.4, 0.2);
+            const strutL = new THREE.Mesh(spoilerStrutGeo, darkTrimMat);
+            strutL.position.set(-0.6, 0.4, 1.5);
+            const strutR = strutL.clone();
+            strutR.position.x = 0.6;
+            
+            const wingGeo = new THREE.BoxGeometry(1.8, 0.05, 0.4);
+            const wingMesh = new THREE.Mesh(wingGeo, darkTrimMat);
+            wingMesh.position.set(0, 0.6, 1.5);
+            lambo.add(strutL, strutR, wingMesh);
+
+            return lambo;
+        }
+
+        // Standard Car
+        function createTrafficCar() {
+            const carGroup = new THREE.Group();
+            const trafficColors = [0x5a67d8, 0x4a5568, 0x319795, 0xe53e3e, 0x4a5568];
+            const randColor = trafficColors[Math.floor(Math.random() * trafficColors.length)];
+            
+            const bodyMat = new THREE.MeshPhongMaterial({ color: randColor, flatShading: true });
+            const glassMat = new THREE.MeshPhongMaterial({ color: 0x111625 });
+            const lightMat = new THREE.MeshBasicMaterial({ color: 0xffffee }); // Headlight material
+
+            const bodyGeo = new THREE.BoxGeometry(1.45, 0.6, 2.9);
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = 0.4;
+            carGroup.add(body);
+
+            const cabinGeo = new THREE.BoxGeometry(1.15, 0.5, 1.4);
+            const cabin = new THREE.Mesh(cabinGeo, glassMat);
+            cabin.position.set(0, 0.85, 0.3); // Shifted forward (+Z)
+            carGroup.add(cabin);
+
+            // Headlights facing +Z
+            const hl = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.2, 0.1), lightMat);
+            hl.position.set(-0.4, 0.4, 1.46);
+            const hr = hl.clone();
+            hr.position.set(0.4, 0.4, 1.46);
+            carGroup.add(hl, hr);
+
+            carGroup.userData = { isTruck: false }; 
+            return carGroup;
+        }
+
+        // Massive Truck
+        function createTrafficTruck() {
+            const truckGroup = new THREE.Group();
+            
+            const trailerMat = new THREE.MeshPhongMaterial({ color: 0xd9d9d9, flatShading: true }); 
+            const cabMat = new THREE.MeshPhongMaterial({ color: 0xc53030, flatShading: true }); 
+            const glassMat = new THREE.MeshPhongMaterial({ color: 0x111625 });
+            const lightMat = new THREE.MeshBasicMaterial({ color: 0xffffee });
+
+            // Giant Trailer Box (shifted back)
+            const trailerGeo = new THREE.BoxGeometry(1.7, 1.8, 4.5);
+            const trailer = new THREE.Mesh(trailerGeo, trailerMat);
+            trailer.position.set(0, 1.0, -0.8);
+            truckGroup.add(trailer);
+
+            // Front Cab (shifted forward to face player)
+            const cabGeo = new THREE.BoxGeometry(1.6, 1.2, 1.5);
+            const cab = new THREE.Mesh(cabGeo, cabMat);
+            cab.position.set(0, 0.7, 2.2);
+            truckGroup.add(cab);
+
+            // Cab Window (facing +Z)
+            const glassGeo = new THREE.BoxGeometry(1.4, 0.5, 0.8);
+            const glass = new THREE.Mesh(glassGeo, glassMat);
+            glass.position.set(0, 1.3, 2.5);
+            truckGroup.add(glass);
+
+            // Headlights facing +Z
+            const hl = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.1), lightMat);
+            hl.position.set(-0.6, 0.4, 2.96);
+            const hr = hl.clone();
+            hr.position.set(0.6, 0.4, 2.96);
+            truckGroup.add(hl, hr);
+
+            truckGroup.userData = { isTruck: true };
+            return truckGroup;
+        }
+
+        const player = createLamborghini();
+        scene.add(player);
+
+        // --- 4. HIGHWAY SCENERY PROCEDURAL SYSTEM ---
+        const environmentGroup = new THREE.Group();
+        scene.add(environmentGroup);
+
+        const fieldGeo = new THREE.PlaneGeometry(300, 300);
+        const fieldMat = new THREE.MeshPhongMaterial({ color: 0x55aa55, flatShading: true }); 
+        const fields = new THREE.Mesh(fieldGeo, fieldMat);
+        fields.rotation.x = -Math.PI / 2;
+        fields.position.y = -0.02;
+        environmentGroup.add(fields);
+
+        const roadGeo = new THREE.PlaneGeometry(15, 200);
+        const roadMat = new THREE.MeshPhongMaterial({ color: 0x2d3748, flatShading: true }); 
+        const road = new THREE.Mesh(roadGeo, roadMat);
+        road.rotation.x = -Math.PI / 2;
+        road.position.z = -80;
+        environmentGroup.add(road);
+
+        const sceneryAssets = [];
+        
+        function createTree(x, z) {
+            const trunkGeo = new THREE.CylinderGeometry(0.15, 0.25, 1.5);
+            const trunkMat = new THREE.MeshPhongMaterial({ color: 0x5c4033 });
+            const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+            trunk.position.set(x, 0.75, z);
+            
+            const foliageGeo = new THREE.BoxGeometry(2.5, 3, 2.5);
+            const foliageMat = new THREE.MeshPhongMaterial({ color: 0x228b22, flatShading: true });
+            const foliage = new THREE.Mesh(foliageGeo, foliageMat);
+            foliage.position.y = 2;
+            trunk.add(foliage);
+            
+            environmentGroup.add(trunk);
+            sceneryAssets.push(trunk);
+        }
+
+        function createWorldScenery() {
+            // Poles and Trees
+            for(let z = 40; z > -160; z -= 18) {
+                const poleGeo = new THREE.CylinderGeometry(0.04, 0.05, 5);
+                const poleMat = new THREE.MeshPhongMaterial({ color: 0x718096 });
+                const pole = new THREE.Mesh(poleGeo, poleMat);
+                pole.position.set(-7.8, 2.5, z);
+                environmentGroup.add(pole);
+                sceneryAssets.push(pole);
+
+                // Trees on both sides
+                createTree(12 + Math.random()*4, z + Math.random()*4);
+                createTree(-12 - Math.random()*4, z + Math.random()*4);
+            }
+            
+            // Dashed Lane Markings
+            const dashGeo = new THREE.PlaneGeometry(0.2, 4);
+            const dashMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            for(let z = 40; z > -160; z -= 12) {
+                const dash1 = new THREE.Mesh(dashGeo, dashMat);
+                dash1.rotation.x = -Math.PI / 2;
+                dash1.position.set(-2.1, 0.01, z);
+                environmentGroup.add(dash1);
+                sceneryAssets.push(dash1);
+
+                const dash2 = new THREE.Mesh(dashGeo, dashMat);
+                dash2.rotation.x = -Math.PI / 2;
+                dash2.position.set(2.1, 0.01, z);
+                environmentGroup.add(dash2);
+                sceneryAssets.push(dash2);
+            }
+        }
+        createWorldScenery();
+
+        // Traffic Asset Arrays
+        const trafficArray = [];
+        
+        function spawnTrafficRow(zOffset) {
+            // All 3 available lanes
+            const lanes = [-4.2, 0, 4.2];
+            
+            // Fisher-Yates shuffle to randomize lane picks completely
+            for (let i = lanes.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [lanes[i], lanes[j]] = [lanes[j], lanes[i]];
+            }
+
+            // Strictly pick either 1 or 2 vehicles to spawn. 
+            // It will NEVER be 3, ensuring at least one open lane.
+            const numObstacles = Math.random() > 0.4 ? 2 : 1;
+
+            for(let i = 0; i < numObstacles; i++) {
+                // Mix of Cars (65%) and Trucks (35%)
+                const isTruck = Math.random() > 0.65;
+                const obstacle = isTruck ? createTrafficTruck() : createTrafficCar();
+                
+                // Spawn with slight staggering on the Z axis to break up uniform rows
+                obstacle.position.set(lanes[i], 0, zOffset + (Math.random() * 4 - 2));
+                scene.add(obstacle);
+                trafficArray.push(obstacle);
+            }
+        }
+
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+        scene.add(ambientLight);
+        const sunLight = new THREE.DirectionalLight(0xfffdf0, 0.9); 
+        sunLight.position.set(30, 60, 10);
+        scene.add(sunLight);
+
+        // --- 5. CV FACE MESH INPUT CONTROLLER ---
+        function onResults(results) {
+            if (isPaused || isGameOver) return;
+            if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                const landmarks = results.multiFaceLandmarks[0];
+                const eyebrowPoint = landmarks[9];
+                
+                targetX = -(eyebrowPoint.x - 0.5) * 16.5;
+                if(targetX < -5.6) targetX = -5.6;
+                if(targetX > 5.6) targetX = 5.6;
+            }
+        }
+
+        const faceMesh = new FaceMesh({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
+        });
+        faceMesh.setOptions({ refineLandmarks: false, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
+        faceMesh.onResults(onResults);
+
+        const cameraFeed = new Camera(videoElement, {
+            onFrame: async () => { await faceMesh.send({ image: videoElement }); },
+            width: 480, height: 360
+        });
+        cameraFeed.start();
+
+
+        // --- 6. GAME ENGINE ANIMATION MATRIX LOOP ---
+        const clock = new THREE.Clock();
+        let lastPosX = 0;
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = clock.getDelta();
+
+            if (!isPaused && !isGameOver) {
+                
+                // 6a. Replenish Jumps stocks chronometrically every 5 seconds
+                jumpTimer += delta;
+                if(jumpTimer >= 5.0) {
+                    if(availableJumps < maxJumps) {
+                        availableJumps++;
+                        updateJumpHUD();
+                    }
+                    jumpTimer = 0; 
+                }
+
+                // 6b. Jump Physics Trajectory Calculations
+                if (isJumping) {
+                    player.position.y += jumpVelocity * delta;
+                    jumpVelocity -= gravity * delta; 
+
+                    if (player.position.y <= 0) { 
+                        player.position.y = 0;
+                        isJumping = false;
+                        jumpVelocity = 0;
+                    }
+                }
+
+                // 6c. Lateral Handling Interpolation Matrix
+                player.position.x += (targetX - player.position.x) * 0.13;
+                player.rotation.y = (player.position.x - targetX) * 0.08;
+                player.rotation.z = (player.position.x - targetX) * 0.06;
+
+                const lateralDeltaVelocity = Math.abs(player.position.x - lastPosX);
+                lastPosX = player.position.x;
+
+                updateAudioMetrics(gameSpeed, lateralDeltaVelocity);
+
+                // 6d. Move & Recycle Incoming Traffic Models
+                for (let i = trafficArray.length - 1; i >= 0; i--) {
+                    const traffic = trafficArray[i];
+                    traffic.position.z += gameSpeed * delta;
+
+                    // 6e. Precise 3D Box Boundary Crash Matrices
+                    const zTolerance = traffic.userData.isTruck ? 3.8 : 2.6;
+                    const yTolerance = traffic.userData.isTruck ? 1.8 : 0.75;
+                    const xTolerance = traffic.userData.isTruck ? 1.5 : 1.4;
+
+                    if (Math.abs(traffic.position.z - player.position.z) < zTolerance) {
+                        if (Math.abs(traffic.position.x - player.position.x) < xTolerance) {
+                            if (player.position.y < yTolerance) { 
+                                triggerGameOver();
+                            }
+                        }
+                    }
+
+                    if (traffic.position.z > 15) {
+                        scene.remove(traffic);
+                        trafficArray.splice(i, 1);
+
+                        // Endless Runner Row Replenishment
+                        if (trafficArray.length < 5) {
+                            spawnTrafficRow(-160);
+                            score += 20;
+                            scoreDisplay.innerText = String(score).padStart(4, '0');
+                            gameSpeed += 0.35; 
+                        }
+                    }
+                }
+
+                sceneryAssets.forEach(asset => {
+                    asset.position.z += gameSpeed * delta;
+                    if(asset.position.z > 25) asset.position.z -= 200;
+                });
+                road.position.z += gameSpeed * delta;
+                if (road.position.z > -30) road.position.z = -80;
+
+                camera.position.x += (player.position.x - camera.position.x) * 0.08;
+                camera.position.y = 3.5 + (player.position.y * 0.4); 
+                camera.lookAt(player.position.x * 0.35, 1.0 + player.position.y, -10);
+            } else {
+                updateAudioMetrics(0, 0);
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // --- 7. EXECUTIVE CONTROL UTILITIES ---
+        
+        function executeJumpTrigger() {
+            if (availableJumps > 0 && !isJumping && !isPaused && !isGameOver) {
+                availableJumps--;
+                updateJumpHUD();
+                isJumping = true;
+                jumpVelocity = 15; 
+            }
+        }
+
+        function updateJumpHUD() {
+            jumpDisplay.innerText = `JUMPS: ${availableJumps}/${maxJumps} ` + (availableJumps === maxJumps ? "(MAX)" : "(CHARGE)");
+        }
+
+        function togglePause() {
+            if (isGameOver) return;
+            isPaused = !isPaused;
+            pauseScreen.classList.toggle('hidden', !isPaused);
+        }
+
+        function triggerGameOver() {
+            isGameOver = true;
+            gameoverScreen.classList.remove('hidden');
+            finalScoreMsg.innerText = `SCORE: ${String(score).padStart(4, '0')}`;
+
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('lambo_hi_score', highScore);
+                hiScoreDisplay.innerText = String(highScore).padStart(4, '0');
+                finalScoreMsg.innerText += "\n[NEW HI-SCORE!]";
+            }
+        }
+
+        function resetGame() {
+            trafficArray.forEach(car => scene.remove(car));
+            trafficArray.length = 0;
+
+            score = 0;
+            gameSpeed = 38;
+            availableJumps = maxJumps; // START WITH MAX JUMPS
+            jumpTimer = 0;
+            isJumping = false;
+            jumpVelocity = 0;
+            player.position.set(0, 0, 0);
+            targetX = 0;
+            
+            updateJumpHUD();
+            scoreDisplay.innerText = "0000";
+
+            // Pre-warm endless traffic
+            for(let z = -30; z > -150; z -= 40) {
+                spawnTrafficRow(z);
+            }
+
+            gameoverScreen.classList.add('hidden');
+            isGameOver = false;
+        }
+
+        window.addEventListener('keydown', (e) => {
+            // Using e.key instead of e.code helps catch both upper and lowercase inputs smoothly
+            if (e.key === 'j' || e.key === 'J') executeJumpTrigger();
+            if (e.code === 'Space') { e.preventDefault(); togglePause(); }
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        animate();
+    </script>
+</body>
+</html>
